@@ -236,7 +236,7 @@ class MixpanelClient(object):
             timer.tags[metrics.Tag.http_status_code] = response.status_code
 
         response_json = response.json()
-        politeness_delay()
+        self.politeness_delay()
         return response_json
 
 
@@ -284,4 +284,4 @@ class MixpanelClient(object):
             for record in reader.iter(allow_none=True, skip_empty=True):
                 yield record
 
-        politeness_delay()
+        self.politeness_delay()
