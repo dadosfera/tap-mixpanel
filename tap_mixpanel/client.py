@@ -1,3 +1,4 @@
+import time
 import base64
 import io
 import backoff
@@ -92,6 +93,15 @@ def raise_for_error(response):
 
 
 class MixpanelClient(object):
+    """
+    API Rate Limit  (https://help.mixpanel.com/hc/en-us/articles/115004602563-Rate-Limits-for-API-Endpoints):
+    A maximum of 5 concurrent queries
+    60 queries per hour.
+
+    API Rate Limit Strategy: after each request freeze for the time period: 3600/reqs_per_hour_limit seconds
+    To remove the API request delay just set reqs_per_hour_limit = 0
+    """
+
     def __init__(self,
                  api_secret,
                  user_agent=None):
@@ -100,6 +110,7 @@ class MixpanelClient(object):
         self.__session = requests.Session()
         self.__verified = False
         self.disable_engage_endpoint = False
+        self.reqs_per_hour_limit = 60
 
     def __enter__(self):
         self.__verified = self.check_access()
@@ -107,6 +118,15 @@ class MixpanelClient(object):
 
     def __exit__(self, exception_type, exception_value, traceback):
         self.__session.close()
+
+    def politeness_delay(self):
+        # Apply politeness delay if there is any rate limitation
+        # even though it is currently a fixed value of 60 requests per hour
+        # in the future we may want to remove this limit by only setting
+        # reqs_per_hour_limit = 0
+        if self.reqs_per_hour_limit > 0:
+            politeness_delay_in_seconds = 3600 / self.reqs_per_hour_limit
+            time.sleep(politeness_delay_in_seconds)
 
 
     @backoff.on_exception(backoff.expo,
@@ -216,6 +236,7 @@ class MixpanelClient(object):
             timer.tags[metrics.Tag.http_status_code] = response.status_code
 
         response_json = response.json()
+        politeness_delay()
         return response_json
 
 
@@ -262,3 +283,5 @@ class MixpanelClient(object):
             reader = jsonlines.Reader(response.iter_lines())
             for record in reader.iter(allow_none=True, skip_empty=True):
                 yield record
+
+        politeness_delay()
